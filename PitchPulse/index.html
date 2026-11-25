@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f19" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PitchPulse" />
+  <title>PitchPulse Live — Ad-Free Football</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-512.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      padding-top: var(--safe-top);
+      padding-bottom: var(--safe-bottom);
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .pitch-bg {
+      background:
+        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.14) 0%, transparent 65%),
+        repeating-linear-gradient(
+          0deg,
+          #0f3d28 0px,
+          #0f3d28 28px,
+          #12472f 28px,
+          #12472f 56px
+        );
+      border: 2px solid rgba(255, 255, 255, 0.22);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Header -->
+  <header class="sticky top-0 z-30 bg-[#0b0f19]/95 backdrop-blur-md border-b border-slate-800/80 px-3 py-2.5">
+    <div class="max-w-6xl mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-sm">
+          PP
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-bold text-base tracking-tight text-white">PitchPulse</h1>
+            <span class="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Live</span>
+          </div>
+          <p id="syncStatus" class="text-[11px] text-slate-400">Syncing live feeds...</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="liveOnlyBtn" onclick="toggleLiveOnly()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800/90 text-slate-300 border border-slate-700 hover:border-slate-600 transition flex items-center gap-1.5">
+          <span id="liveDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+          <span>Live (<span id="liveCount">0</span>)</span>
+        </button>
+        <button onclick="manualRefresh()" title="Refresh Scores" class="p-2 rounded-lg bg-slate-800/90 text-slate-300 border border-slate-700 hover:text-white transition">
+          <svg id="refreshIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+        <button id="installBtn" onclick="triggerInstall()" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition shadow-lg shadow-emerald-500/20">
+          Install App
+        </button>
+      </div>
+    </div>
+
+    <!-- Date Selector + Search -->
+    <div class="max-w-6xl mx-auto mt-2.5 flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+        <button onclick="shiftDate(-1)" class="px-2.5 py-1 rounded-lg text-xs text-slate-300 hover:bg-slate-800">◀</button>
+        <button onclick="setToday()" id="dateTodayBtn" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-500/10">Today</button>
+        <input type="date" id="datePicker" onchange="onDatePick(this.value)" class="bg-transparent text-xs text-slate-200 px-2 py-1 focus:outline-none" />
+        <button onclick="shiftDate(1)" class="px-2.5 py-1 rounded-lg text-xs text-slate-300 hover:bg-slate-800">▶</button>
+      </div>
+
+      <input type="text" id="searchInput" oninput="renderMatches()" placeholder="Filter team or competition..." class="flex-1 min-w-[180px] max-w-xs bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+    </div>
+
+    <!-- Competition Category Pills -->
+    <div id="categoryTabs" class="max-w-6xl mx-auto mt-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"></div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-3 py-3 grid grid-cols-1 lg:grid-cols-12 gap-4">
+    <!-- Left Column: Match List -->
+    <section id="matchesCol" class="lg:col-span-5 space-y-3">
+      <div id="matchesContainer" class="space-y-3"></div>
+    </section>
+
+    <!-- Right Column: Match Center (Desktop sticky / Mobile drawer) -->
+    <section id="detailCol" class="hidden lg:block lg:col-span-7">
+      <div id="matchDetailContainer" class="sticky top-36 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 min-h-[460px]">
+        <div class="h-full flex flex-col items-center justify-center text-center py-20 text-slate-400">
+          <p class="text-sm font-medium text-slate-300">Select any match</p>
+          <p class="text-xs mt-1">View real-time tactical lineups, live substitutions, stats & player cards.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Mobile Match Detail Full-Screen Overlay -->
+  <div id="mobileDetailOverlay" class="fixed inset-0 z-40 bg-[#0b0f19] hidden flex-col lg:hidden">
+    <div class="flex items-center justify-between px-3 py-3 border-b border-slate-800 bg-[#0b0f19]/95 backdrop-blur">
+      <button onclick="closeMobileDetail()" class="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+        ← Back to Scores
+      </button>
+      <span id="mobileOverlayTitle" class="text-xs font-semibold text-slate-300 truncate max-w-[60%]">Match Center</span>
+    </div>
+    <div id="mobileDetailBody" class="flex-1 overflow-y-auto p-3 pb-10"></div>
+  </div>
+
+  <!-- Player Profile Modal -->
+  <div id="playerModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this) closePlayerModal()">
+    <div class="bg-slate-900 border border-slate-700/80 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl max-h-[88vh] flex flex-col">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/60">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Player Match Profile</span>
+        <button onclick="closePlayerModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center text-sm">✕</button>
+      </div>
+      <div id="playerModalBody" class="p-4 overflow-y-auto space-y-4"></div>
+    </div>
+  </div>
+
+  <script>
+    // Register Service Worker for true standalone PWA installation
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('installBtn');
+      if (btn) btn.classList.remove('hidden');
+    });
+
+    async function triggerInstall() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        document.getElementById('installBtn').classList.add('hidden');
+      }
+      deferredPrompt = null;
+    }
+
+    // Competitions Configuration (Top 5 Leagues, Primeira Liga, All Domestic Cups, UCL/UEL, International)
+    const LEAGUES = [
+      // Top 5 Leagues
+      { slug: 'eng.1', name: 'Premier League', country: 'England', cat: 'Top 5' },
+      { slug: 'esp.1', name: 'La Liga', country: 'Spain', cat: 'Top 5' },
+      { slug: 'ger.1', name: 'Bundesliga', country: 'Germany', cat: 'Top 5' },
+      { slug: 'ita.1', name: 'Serie A', country: 'Italy', cat: 'Top 5' },
+      { slug: 'fra.1', name: 'Ligue 1', country: 'France', cat: 'Top 5' },
+      // Primeira Liga
+      { slug: 'por.1', name: 'Primeira Liga', country: 'Portugal', cat: 'Primeira Liga' },
+      // Domestic Cups for all 6 countries
+      { slug: 'eng.fa', name: 'FA Cup', country: 'England', cat: 'Cups' },
+      { slug: 'eng.league_cup', name: 'EFL Cup', country: 'England', cat: 'Cups' },
+      { slug: 'esp.copa_del_rey', name: 'Copa del Rey', country: 'Spain', cat: 'Cups' },
+      { slug: 'ger.dfb_pokal', name: 'DFB-Pokal', country: 'Germany', cat: 'Cups' },
+      { slug: 'ita.coppa_italia', name: 'Coppa Italia', country: 'Italy', cat: 'Cups' },
+      { slug: 'fra.coupe_de_france', name: 'Coupe de France', country: 'France', cat: 'Cups' },
+      { slug: 'por.taca.portugal', name: 'Taça de Portugal', country: 'Portugal', cat: 'Cups' },
+      // UEFA Club Competitions
+      { slug: 'uefa.champions', name: 'UEFA Champions League', country: 'Europe', cat: 'Champions League' },
+      { slug: 'uefa.europa', name: 'UEFA Europa League', country: 'Europe', cat: 'Champions League' },
+      // International / Country Football
+      { slug: 'fifa.friendly', name: 'International Friendlies', country: 'World', cat: 'International' },
+      { slug: 'uefa.nations', name: 'UEFA Nations League', country: 'Europe', cat: 'International' },
+      { slug: 'fifa.worldq.uefa', name: 'WC Qualifiers (UEFA)', country: 'Europe', cat: 'International' },
+      { slug: 'fifa.worldq.conmebol', name: 'WC Qualifiers (CONMEBOL)', country: 'South America', cat: 'International' },
+      { slug: 'fifa.world', name: 'FIFA World Cup', country: 'World', cat: 'International' }
+    ];
+
+    const CATEGORIES = ['All', 'Top 5', 'Primeira Liga', 'Cups', 'Champions League', 'International'];
+
+    let state = {
+      selectedCat: 'All',
+      liveOnly: false,
+      dateStr: formatYMD(new Date()),
+      matches: [],
+      selectedMatchId: null,
+      selectedLeagueSlug: null,
+      detailTab: 'lineups',
+      lineupMode: 'live', // 'live' or 'starting'
+      activeSummary: null
+    };
+
+    function formatYMD(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function toEspnDate(ymd) {
+      return ymd.replace(/-/g, '');
+    }
+
+    async function fetchJsonResilient(url) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) return await res.json();
+      } catch (e) {}
+      try {
+        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxy);
+        if (res.ok) return await res.json();
+      } catch (e) {}
+      return null;
+    }
+
+    function init() {
+      document.getElementById('datePicker').value = state.dateStr;
+      renderCategoryTabs();
+      loadAllMatches();
+      setInterval(() => {
+        loadAllMatches(true);
+        if (state.selectedMatchId && state.selectedLeagueSlug) {
+          loadMatchSummary(state.selectedLeagueSlug, state.selectedMatchId, true);
+        }
+      }, 25000);
+    }
+
+    function renderCategoryTabs() {
+      const el = document.getElementById('categoryTabs');
+      el.innerHTML = CATEGORIES.map(cat => {
+        const active = state.selectedCat === cat;
+        return `<button onclick="selectCategory('${cat}')" class="whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+          active
+            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+            : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700'
+        }">${cat}</button>`;
+      }).join('');
+    }
+
+    function selectCategory(cat) {
+      state.selectedCat = cat;
+      renderCategoryTabs();
+      renderMatches();
+    }
+
+    function toggleLiveOnly() {
+      state.liveOnly = !state.liveOnly;
+      const btn = document.getElementById('liveOnlyBtn');
+      const dot = document.getElementById('liveDot');
+      if (state.liveOnly) {
+        btn.classList.add('border-emerald-500/60', 'text-emerald-300', 'bg-emerald-500/10');
+        dot.classList.replace('bg-slate-500', 'bg-emerald-400');
+        dot.classList.add('animate-pulse');
+      } else {
+        btn.classList.remove('border-emerald-500/60', 'text-emerald-300', 'bg-emerald-500/10');
+        dot.classList.replace('bg-emerald-400', 'bg-slate-500');
+        dot.classList.remove('animate-pulse');
+      }
+      renderMatches();
+    }
+
+    function shiftDate(delta) {
+      const parts = state.dateStr.split('-').map(Number);
+      const d = new Date(parts[0], parts[1] - 1, parts[2] + delta);
+      state.dateStr = formatYMD(d);
+      document.getElementById('datePicker').value = state.dateStr;
+      loadAllMatches();
+    }
+
+    function setToday() {
+      state.dateStr = formatYMD(new Date());
+      document.getElementById('datePicker').value = state.dateStr;
+      loadAllMatches();
+    }
+
+    function onDatePick(val) {
+      if (!val) return;
+      state.dateStr = val;
+      loadAllMatches();
+    }
+
+    function manualRefresh() {
+      const icon = document.getElementById('refreshIcon');
+      icon.classList.add('animate-spin');
+      loadAllMatches().finally(() => {
+        setTimeout(() => icon.classList.remove('animate-spin'), 500);
+      });
+      if (state.selectedMatchId && state.selectedLeagueSlug) {
+        loadMatchSummary(state.selectedLeagueSlug, state.selectedMatchId, true);
+      }
+    }
+
+    async function loadAllMatches(silent = false) {
+      if (!silent) {
+        document.getElementById('syncStatus').textContent = 'Fetching live scores...';
+      }
+      const dateParam = toEspnDate(state.dateStr);
+      const results = await Promise.all(
+        LEAGUES.map(async (lg) => {
+          const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg.slug}/scoreboard?dates=${dateParam}`;
+          const data = await fetchJsonResilient(url);
+          if (!data || !Array.isArray(data.events)) return [];
+          return data.events.map(ev => parseScoreboardEvent(ev, lg));
+        })
+      );
+
+      state.matches = results.flat().sort((a, b) => {
+        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+        return new Date(a.date) - new Date(b.date);
+      });
+
+      const liveTotal = state.matches.filter(m => m.isLive).length;
+      document.getElementById('liveCount').textContent = liveTotal;
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      document.getElementById('syncStatus').textContent = `Updated ${now} • ${state.matches.length} fixtures`;
+
+      renderMatches();
+    }
+
+    function parseScoreboardEvent(ev, lg) {
+      const comp = ev.competitions?.[0] || {};
+      const competitors = comp.competitors || [];
+      const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
+      const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+      const statusType = ev.status?.type || {};
+      const statusState = statusType.state; // 'in', 'pre', 'post'
+      const isLive = statusState === 'in';
+      const isFinal = statusState === 'post';
+
+      let displayClock = statusType.shortDetail || '';
+      if (isLive && ev.status?.displayClock) {
+        displayClock = statusType.detail === 'Halftime' ? 'HT' : ev.status.displayClock;
+      } else if (!isLive && !isFinal) {
+        const dt = new Date(ev.date);
+        displayClock = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+
+      return {
+        id: ev.id,
+        date: ev.date,
+        leagueSlug: lg.slug,
+        leagueName: lg.name,
+        country: lg.country,
+        category: lg.cat,
+        isLive,
+        isFinal,
+        clock: displayClock,
+        home: {
+          id: home.team?.id,
+          name: home.team?.shortDisplayName || home.team?.displayName || 'Home',
+          logo: home.team?.logo || '',
+          score: home.score ?? '-'
+        },
+        away: {
+          id: away.team?.id,
+          name: away.team?.shortDisplayName || away.team?.displayName || 'Away',
+          logo: away.team?.logo || '',
+          score: away.score ?? '-'
+        }
+      };
+    }
+
+    function renderMatches() {
+      const container = document.getElementById('matchesContainer');
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      const filtered = state.matches.filter(m => {
+        if (state.selectedCat !== 'All' && m.category !== state.selectedCat) return false;
+        if (state.liveOnly && !m.isLive) return false;
+        if (query) {
+          const hay = `${m.home.name} ${m.away.name} ${m.leagueName} ${m.country}`.toLowerCase();
+          if (!hay.includes(query)) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-8 text-center">
+            <p class="text-sm font-semibold text-slate-300">No matches found</p>
+            <p class="text-xs text-slate-400 mt-1">Try another date, competition tab, or turn off the Live filter.</p>
+          </div>`;
+        return;
+      }
+
+      // Group by leagueSlug
+      const groups = {};
+      filtered.forEach(m => {
+        if (!groups[m.leagueSlug]) {
+          groups[m.leagueSlug] = { name: m.leagueName, country: m.country, items: [] };
+        }
+        groups[m.leagueSlug].items.push(m);
+      });
+
+      container.innerHTML = Object.values(groups).map(grp => `
+        <div class="bg-slate-900/75 border border-slate-800/90 rounded-2xl overflow-hidden">
+          <div class="px-3.5 py-2 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-slate-200">${grp.name}</span>
+              <span class="text-[10px] text-slate-500 uppercase">${grp.country}</span>
+            </div>
+            <span class="text-[11px] text-slate-500">${grp.items.length}</span>
+          </div>
+          <div class="divide-y divide-slate-800/60">
+            ${grp.items.map(m => {
+              const selected = m.id === state.selectedMatchId;
+              return `
+                <button onclick="openMatch('${m.leagueSlug}', '${m.id}')" class="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-800/50 transition ${selected ? 'bg-emerald-500/10 border-l-2 border-emerald-400' : ''}">
+                  <div class="w-14 shrink-0 text-center">
+                    <span class="inline-block text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                      m.isLive
+                        ? 'bg-emerald-500/20 text-emerald-400 animate-pulse'
+                        : m.isFinal
+                          ? 'text-slate-400 bg-slate-800/80'
+                          : 'text-slate-300'
+                    }">${m.clock}</span>
+                  </div>
+                  <div class="flex-1 min-w-0 space-y-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        ${m.home.logo ? `<img src="${m.home.logo}" class="w-4 h-4 object-contain shrink-0" />` : ''}
+                        <span class="text-xs font-semibold truncate ${m.isLive ? 'text-white' : 'text-slate-200'}">${m.home.name}</span>
+                      </div>
+                      <span class="text-xs font-bold tabular-nums ${m.isLive ? 'text-emerald-400' : 'text-white'}">${m.isLive || m.isFinal ? m.home.score : ''}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        ${m.away.logo ? `<img src="${m.away.logo}" class="w-4 h-4 object-contain shrink-0" />` : ''}
+                        <span class="text-xs font-semibold truncate ${m.isLive ? 'text-white' : 'text-slate-200'}">${m.away.name}</span>
+                      </div>
+                      <span class="text-xs font-bold tabular-nums ${m.isLive ? 'text-emerald-400' : 'text-white'}">${m.isLive || m.isFinal ? m.away.score : ''}</span>
+                    </div>
+                  </div>
+                </button>`;
+            }).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function openMatch(leagueSlug, eventId) {
+      state.selectedMatchId = eventId;
+      state.selectedLeagueSlug = leagueSlug;
+      renderMatches();
+
+      const isMobile = window.innerWidth < 1024;
+      if (isMobile) {
+        document.getElementById('mobileDetailOverlay').classList.remove('hidden');
+        document.getElementById('mobileDetailOverlay').classList.add('flex');
+        document.getElementById('mobileDetailBody').innerHTML = `<div class="py-16 text-center text-xs text-slate-400">Loading match lineups & live events...</div>`;
+      } else {
+        document.getElementById('matchDetailContainer').innerHTML = `<div class="py-20 text-center text-xs text-slate-400">Loading match lineups & live events...</div>`;
+      }
+
+      await loadMatchSummary(leagueSlug, eventId, false);
+    }
+
+    function closeMobileDetail() {
+      document.getElementById('mobileDetailOverlay').classList.add('hidden');
+      document.getElementById('mobileDetailOverlay').classList.remove('flex');
+    }
+
+    async function loadMatchSummary(leagueSlug, eventId, silent = false) {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueSlug}/summary?event=${eventId}`;
+      const data = await fetchJsonResilient(url);
+      if (!data) return;
+      state.activeSummary = data;
+      renderMatchDetail();
+    }
+
+    function setDetailTab(tab) {
+      state.detailTab = tab;
+      renderMatchDetail();
+    }
+
+    function setLineupMode(mode) {
+      state.lineupMode = mode;
+      renderMatchDetail();
+    }
+
+    function renderMatchDetail() {
+      const data = state.activeSummary;
+      if (!data) return;
+
+      const comp = data.header?.competitions?.[0] || {};
+      const competitors = comp.competitors || [];
+      const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
+      const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+      const status = comp.status?.type?.shortDetail || '';
+      const isLive = comp.status?.type?.state === 'in';
+
+      const homeName = home.team?.shortDisplayName || home.team?.displayName || 'Home';
+      const awayName = away.team?.shortDisplayName || away.team?.displayName || 'Away';
+      document.getElementById('mobileOverlayTitle').textContent = `${homeName} vs ${awayName}`;
+
+      const html = `
+        <!-- Scoreboard Header -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 mb-3">
+          <div class="text-center mb-2">
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${isLive ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' : 'bg-slate-800 text-slate-300'}">${status}</span>
+          </div>
+          <div class="grid grid-cols-3 items-center text-center gap-2">
+            <div class="flex flex-col items-center gap-1.5">
+              ${home.team?.logos?.[0]?.href ? `<img src="${home.team.logos[0].href}" class="w-11 h-11 object-contain" />` : ''}
+              <span class="text-xs font-bold text-white leading-tight">${homeName}</span>
+            </div>
+            <div class="text-2xl sm:text-3xl font-black tracking-tight tabular-nums text-white">
+              ${home.score ?? '-'} <span class="text-slate-600">:</span> ${away.score ?? '-'}
+            </div>
+            <div class="flex flex-col items-center gap-1.5">
+              ${away.team?.logos?.[0]?.href ? `<img src="${away.team.logos[0].href}" class="w-11 h-11 object-contain" />` : ''}
+              <span class="text-xs font-bold text-white leading-tight">${awayName}</span>
+            </div>
+          </div>
+
+          <!-- Sub-tabs -->
+          <div class="grid grid-cols-3 gap-1.5 mt-4 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            ${['lineups', 'events', 'stats'].map(t => `
+              <button onclick="setDetailTab('${t}')" class="py-1.5 rounded-lg text-xs font-bold capitalize transition ${
+                state.detailTab === t ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              }">${t === 'lineups' ? 'Lineups & Subs' : t === 'events' ? 'Timeline' : 'Match Stats'}</button>
+            `).join('')}
+          </div>
+        </div>
+
+        ${state.detailTab === 'lineups' ? renderLineupsSection(data, home, away) : ''}
+        ${state.detailTab === 'events' ? renderEventsSection(data, home, away) : ''}
+        ${state.detailTab === 'stats' ? renderStatsSection(data, home, away) : ''}
+      `;
+
+      document.getElementById('matchDetailContainer').innerHTML = html;
+      document.getElementById('mobileDetailBody').innerHTML = html;
+    }
+
+    function classifyPosition(posAbbr, posId) {
+      const p = (posAbbr || '').toUpperCase();
+      if (p === 'G' || p === 'GK' || posId === '1') return { line: 'GK', flank: 0 };
+      if (['LB', 'LWB'].includes(p)) return { line: 'DEF', flank: -2 };
+      if (['CB', 'LCB', 'SW'].includes(p)) return { line: 'DEF', flank: -0.5 };
+      if (['RCB'].includes(p)) return { line: 'DEF', flank: 0.5 };
+      if (['RB', 'RWB'].includes(p)) return { line: 'DEF', flank: 2 };
+      if (p === 'D' || p === 'DF' || posId === '2') return { line: 'DEF', flank: 0 };
+
+      if (['LM', 'LW', 'LAM'].includes(p)) return { line: 'MID', flank: -2 };
+      if (['LCM', 'LDM'].includes(p)) return { line: 'MID', flank: -0.6 };
+      if (['CM', 'CDM', 'CAM', 'DM', 'AM', 'M', 'MF'].includes(p) || posId === '3') return { line: 'MID', flank: 0 };
+      if (['RCM', 'RDM'].includes(p)) return { line: 'MID', flank: 0.6 };
+      if (['RM', 'RW', 'RAM'].includes(p)) return { line: 'MID', flank: 2 };
+
+      if (['LF', 'LS'].includes(p)) return { line: 'FWD', flank: -1.5 };
+      if (['ST', 'CF', 'F', 'FW'].includes(p) || posId === '4') return { line: 'FWD', flank: 0 };
+      if (['RF', 'RS'].includes(p)) return { line: 'FWD', flank: 1.5 };
+      return { line: 'MID', flank: 0 };
+    }
+
+    function parseFormationLines(formationStr) {
+      if (!formationStr) return [4, 3, 3];
+      const nums = formationStr.split('-').map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0);
+      if (nums.length >= 2 && nums.reduce((a, b) => a + b, 0) === 10) return nums;
+      return [4, 3, 3];
+    }
+
+    function buildPitchNodes(rosterEntry, isAway) {
+      const formation = rosterEntry.formation || '4-3-3';
+      const lines = parseFormationLines(formation);
+      const athletes = rosterEntry.roster || [];
+
+      const starters = [];
+      const bench = [];
+
+      athletes.forEach(item => {
+        const ath = item.athlete || {};
+        const posAbbr = item.position?.abbreviation || ath.position?.abbreviation || '';
+        const posId = String(item.position?.id || ath.position?.id || '');
+        const cls = classifyPosition(posAbbr, posId);
+
+        let subOutMin = null;
+        let subInMin = null;
+        let goals = 0;
+        let yellow = false;
+        let red = false;
+
+        (item.plays || []).forEach(pl => {
+          const txt = (pl.text || '').toLowerCase();
+          const min = pl.clock?.displayValue || '';
+          if (pl.substitution) {
+            if (txt.includes('replaces') || txt.includes('on for')) subInMin = min;
+            else subOutMin = min;
+          }
+          if (pl.scoringPlay) goals++;
+          if (pl.yellowCard) yellow = true;
+          if (pl.redCard) red = true;
+        });
+
+        // Extract stats map for player modal
+        const statsMap = {};
+        (item.stats || []).forEach(st => {
+          statsMap[st.shortDisplayName || st.name] = st.displayValue;
+        });
+
+        const playerObj = {
+          id: ath.id,
+          name: ath.shortName || ath.displayName || 'Player',
+          fullName: ath.displayName || ath.shortName || 'Player',
+          jersey: item.jersey || ath.jersey || '',
+          pos: posAbbr || 'SUB',
+          line: cls.line,
+          flank: cls.flank,
+          starter: !!item.starter,
+          subbedOut: !!item.subbedOut || !!subOutMin,
+          subOutMin,
+          subInMin,
+          goals,
+          yellow,
+          red,
+          rating: statsMap['RTG'] || statsMap['Rating'] || null,
+          statsMap,
+          teamName: rosterEntry.team?.shortDisplayName || ''
+        };
+
+        if (playerObj.starter) starters.push(playerObj);
+        else bench.push(playerObj);
+      });
+
+      if (starters.length === 0) return { nodes: [], bench, formation };
+
+      // Sort starters into GK + outfield ordered by line (DEF -> MID -> FWD) and flank (-2 left to +2 right)
+      const lineWeight = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+      const sorted = [...starters].sort((a, b) => {
+        if (lineWeight[a.line] !== lineWeight[b.line]) return lineWeight[a.line] - lineWeight[b.line];
+        if (a.flank !== b.flank) return a.flank - b.flank;
+        return (parseInt(a.jersey, 10) || 99) - (parseInt(b.jersey, 10) || 99);
+      });
+
+      const gk = sorted[0];
+      const outfield = sorted.slice(1);
+
+      // Slice outfield according to formation lines (e.g., [4, 2, 3, 1])
+      const rows = [[gk]];
+      let cursor = 0;
+      lines.forEach(count => {
+        const slice = outfield.slice(cursor, cursor + count).sort((a, b) => a.flank - b.flank);
+        rows.push(slice);
+        cursor += count;
+      });
+      if (cursor < outfield.length) {
+        rows[rows.length - 1].push(...outfield.slice(cursor));
+      }
+
+      // Compute (x%, y%) coordinates for half-pitch (Home top half 6%->45%, Away bottom half 94%->55%)
+      const nodes = [];
+      const totalRows = rows.length;
+      rows.forEach((rowPlayers, rIdx) => {
+        const progress = totalRows > 1 ? rIdx / (totalRows - 1) : 0;
+        const y = isAway
+          ? 93 - progress * 38
+          : 7 + progress * 38;
+
+        rowPlayers.forEach((p, idx) => {
+          const span = rowPlayers.length;
+          const x = span === 1 ? 50 : 14 + (idx / (span - 1)) * 72;
+          let displayPlayer = p;
+
+          // In 'live' mode, if starter was subbed off, pair with an active sub who came on
+          if (state.lineupMode === 'live' && p.subbedOut) {
+            const replacement = bench.find(b => b.subInMin && !b._assigned);
+            if (replacement) {
+              replacement._assigned = true;
+              displayPlayer = { ...replacement, replacedName: p.name };
+            }
+          }
+          nodes.push({ ...displayPlayer, x, y });
+        });
+      });
+
+      return { nodes, bench, formation };
+    }
+
+    function renderLineupsSection(data, home, away) {
+      const rosters = data.rosters || [];
+      if (rosters.length < 2) {
+        return `<div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-400">Official lineups are usually published 45–60 minutes before kickoff.</div>`;
+      }
+
+      const homeRoster = rosters.find(r => r.homeAway === 'home') || rosters[0];
+      const awayRoster = rosters.find(r => r.homeAway === 'away') || rosters[1];
+
+      const homePitch = buildPitchNodes(homeRoster, false);
+      const awayPitch = buildPitchNodes(awayRoster, true);
+
+      window._playerRegistry = {};
+      [...homePitch.nodes, ...homePitch.bench, ...awayPitch.nodes, ...awayPitch.bench].forEach(p => {
+        if (p.id) window._playerRegistry[p.id] = p;
+      });
+
+      const renderNode = (p, isAway) => `
+        <button onclick="openPlayerModal('${p.id}')" style="left:${p.x}%; top:${p.y}%;" class="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group z-10 w-16">
+          <div class="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[11px] font-black shadow-md border-2 transition transform group-hover:scale-110 ${
+            isAway ? 'bg-sky-500 text-slate-950 border-white' : 'bg-emerald-400 text-slate-950 border-white'
+          }">
+            ${p.jersey || '•'}
+            ${p.goals > 0 ? `<span class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white text-slate-950 text-[9px] font-black flex items-center justify-center shadow">⚽</span>` : ''}
+            ${p.subInMin ? `<span class="absolute -bottom-1 -right-1.5 px-1 rounded bg-emerald-600 text-white text-[8px] font-bold">↑${p.subInMin}</span>` : ''}
+            ${p.yellow ? `<span class="absolute -top-1 -left-1 w-2.5 h-3.5 rounded-[2px] bg-yellow-400 border border-slate-900"></span>` : ''}
+            ${p.red ? `<span class="absolute -top-1 -left-1 w-2.5 h-3.5 rounded-[2px] bg-red-500 border border-slate-900"></span>` : ''}
+          </div>
+          <span class="mt-0.5 px-1.5 py-0.2 rounded bg-slate-950/85 text-[10px] font-semibold text-white truncate max-w-[68px] leading-tight">
+            ${p.name.split(' ').pop()}
+          </span>
+        </button>
+      `;
+
+      return `
+        <div class="space-y-3">
+          <!-- Lineup Mode Switcher -->
+          <div class="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2">
+            <div class="text-[11px] text-slate-300">
+              <span class="font-bold text-emerald-400">${homePitch.formation}</span> vs <span class="font-bold text-sky-400">${awayPitch.formation}</span>
+            </div>
+            <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+              <button onclick="setLineupMode('live')" class="px-2.5 py-1 rounded-md text-[11px] font-bold ${state.lineupMode === 'live' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}">Current XI</button>
+              <button onclick="setLineupMode('starting')" class="px-2.5 py-1 rounded-md text-[11px] font-bold ${state.lineupMode === 'starting' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}">Starting XI</button>
+            </div>
+          </div>
+
+          <!-- Tactical Pitch -->
+          <div class="relative w-full h-[540px] sm:h-[600px] rounded-2xl pitch-bg overflow-hidden shadow-inner">
+            <!-- Halfway Line & Center Circle -->
+            <div class="absolute inset-x-0 top-1/2 border-t border-white/25"></div>
+            <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border border-white/25"></div>
+            <!-- Penalty Boxes -->
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-44 h-16 border-b border-x border-white/25"></div>
+            <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 h-16 border-t border-x border-white/25"></div>
+
+            ${homePitch.nodes.map(p => renderNode(p, false)).join('')}
+            ${awayPitch.nodes.map(p => renderNode(p, true)).join('')}
+          </div>
+
+          <!-- Substitutes & Real-Time Subs List -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ${[
+              { title: home.team?.shortDisplayName || 'Home', bench: homePitch.bench, color: 'text-emerald-400' },
+              { title: away.team?.shortDisplayName || 'Away', bench: awayPitch.bench, color: 'text-sky-400' }
+            ].map(side => `
+              <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3">
+                <h4 class="text-xs font-bold ${side.color} mb-2">${side.title} Bench & Subs</h4>
+                <div class="space-y-1.5">
+                  ${side.bench.map(b => `
+                    <button onclick="openPlayerModal('${b.id}')" class="w-full flex items-center justify-between text-left px-2.5 py-1.5 rounded-lg bg-slate-950/60 hover:bg-slate-800/80 transition">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-[11px] font-mono text-slate-500 w-5">${b.jersey || '-'}</span>
+                        <span class="text-xs font-medium text-slate-200 truncate">${b.name}</span>
+                        <span class="text-[10px] text-slate-500">${b.pos}</span>
+                      </div>
+                      ${b.subInMin ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">ON ${b.subInMin}</span>` : ''}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEventsSection(data, home, away) {
+      const plays = data.keyEvents || [];
+      if (plays.length === 0) {
+        return `<div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-400">No key match events recorded yet.</div>`;
+      }
+      return `
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl divide-y divide-slate-800/70">
+          ${plays.map(ev => {
+            const min = ev.clock?.displayValue || '';
+            const typeText = ev.type?.text || '';
+            const isGoal = ev.scoringPlay;
+            const isSub = typeText.toLowerCase().includes('substitution');
+            const badge = isGoal ? '⚽' : isSub ? '🔄' : typeText.toLowerCase().includes('yellow') ? '🟨' : typeText.toLowerCase().includes('red') ? '🟥' : '•';
+            return `
+              <div class="px-3.5 py-2.5 flex items-start gap-3">
+                <span class="text-xs font-bold text-emerald-400 w-10 shrink-0">${min}</span>
+                <span class="text-sm leading-none">${badge}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-semibold text-white">${typeText}</p>
+                  <p class="text-[11px] text-slate-400 mt-0.5">${ev.text || ''}</p>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderStatsSection(data, home, away) {
+      const teams = data.boxscore?.teams || [];
+      if (teams.length < 2) {
+        return `<div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-400">Match statistics will appear once kickoff begins.</div>`;
+      }
+      const hStats = teams[0].statistics || [];
+      const aStats = teams[1].statistics || [];
+      return `
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+          ${hStats.map((st, i) => {
+            const hVal = st.displayValue || '0';
+            const aVal = aStats[i]?.displayValue || '0';
+            const hNum = parseFloat(hVal) || 0;
+            const aNum = parseFloat(aVal) || 0;
+            const total = hNum + aNum || 1;
+            const hPct = Math.round((hNum / total) * 100);
+            return `
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1">
+                  <span class="text-emerald-400">${hVal}</span>
+                  <span class="text-slate-400 text-[11px]">${st.label}</span>
+                  <span class="text-sky-400">${aVal}</span>
+                </div>
+                <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
+                  <div style="width:${hPct}%" class="bg-emerald-500"></div>
+                  <div style="width:${100 - hPct}%" class="bg-sky-500"></div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    async function openPlayerModal(playerId) {
+      const p = window._playerRegistry?.[playerId];
+      if (!p) return;
+      const modal = document.getElementById('playerModal');
+      const body = document.getElementById('playerModalBody');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      const statEntries = Object.entries(p.statsMap || {});
+      body.innerHTML = `
+        <div class="flex items-center gap-3.5">
+          <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-xl font-black text-emerald-400">
+            #${p.jersey || '•'}
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">${p.fullName}</h3>
+            <p class="text-xs text-slate-400">${p.teamName} • Position: <span class="text-slate-200 font-semibold">${p.pos}</span></p>
+            <div class="flex items-center gap-2 mt-1">
+              ${p.goals > 0 ? `<span class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">⚽ ${p.goals} Goal(s)</span>` : ''}
+              ${p.subInMin ? `<span class="text-[11px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold">Subbed On ${p.subInMin}</span>` : ''}
+              ${p.subOutMin ? `<span class="text-[11px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">Subbed Off ${p.subOutMin}</span>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Live Match Performance</h4>
+          ${statEntries.length > 0 ? `
+            <div class="grid grid-cols-3 gap-2">
+              ${statEntries.map(([k, v]) => `
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-center">
+                  <div class="text-sm font-black text-white">${v}</div>
+                  <div class="text-[10px] text-slate-400 uppercase mt-0.5">${k}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : `<p class="text-xs text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800">Detailed live player metrics populate as match events occur.</p>`}
+        </div>
+
+        <div id="athleteBioSection" class="text-xs text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          Loading career bio...
+        </div>
+      `;
+
+      const bioData = await fetchJsonResilient(`https://site.api.espn.com/apis/common/v3/sports/soccer/athletes/${playerId}`);
+      const ath = bioData?.athlete;
+      const bioEl = document.getElementById('athleteBioSection');
+      if (ath && bioEl) {
+        bioEl.innerHTML = `
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div><span class="text-slate-500">Nationality:</span> <span class="text-slate-200 font-semibold">${ath.citizenship || 'N/A'}</span></div>
+            <div><span class="text-slate-500">Age:</span> <span class="text-slate-200 font-semibold">${ath.age || 'N/A'}</span></div>
+            <div><span class="text-slate-500">Height:</span> <span class="text-slate-200 font-semibold">${ath.displayHeight || 'N/A'}</span></div>
+            <div><span class="text-slate-500">Preferred Foot:</span> <span class="text-slate-200 font-semibold">${ath.foot || 'N/A'}</span></div>
+          </div>
+        `;
+      } else if (bioEl) {
+        bioEl.textContent = 'Career bio unavailable for this fixture.';
+      }
+    }
+
+    function closePlayerModal() {
+      document.getElementById('playerModal').classList.add('hidden');
+      document.getElementById('playerModal').classList.remove('flex');
+    }
+
+    init();
+  </script>
+</body>
+</html>
